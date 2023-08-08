@@ -1,0 +1,148 @@
+{{- if .Values.alert.prometheusAlertmanager.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-prometheus-alertmanager
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: prometheus-alertmanager
+    rules:
+      {{- if .Values.alert.prometheusAlertmanager.prometheusAlertmanagerJobMissing }}
+      - alert: PrometheusAlertmanagerJobMissing
+        expr: absent(up{job=~".*alertmanager$"})
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스 Alertmanager"
+          current: " → 자체 메트릭 수집 중단"
+        annotations:
+          summary: "Prometheus AlertManager job missing"
+          description: "프로메테우스 알람매니저 관련 메트릭 수집이 중단됐습니다."
+          # description: "A Prometheus AlertManager job has disappeared"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusAlertmanagerConfigurationReloadFailure }}
+      - alert: PrometheusAlertmanagerConfigurationReloadFailure
+        expr: alertmanager_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스 Alertmanager"
+          current: " → 설정 업로드 실패"
+        annotations:
+          summary: "Prometheus AlertManager configuration reload failure"
+          description: "프로메테우스 알람매니저의 설정 파일 업로드를 실패했습니다."
+          # description: "AlertManager configuration reload error"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusAlertmanagerConfigNotSynced }}
+      - alert: PrometheusAlertmanagerConfigNotSynced
+        expr: count(count_values("config_hash", alertmanager_config_hash)) > 1
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스 Alertmanager"
+          current: " → 설정 Sync 실패"
+        annotations:
+          summary: "Prometheus AlertManager config not synced"
+          description: "프로메테우스 알람매니저의 설정 파일의 Sync가 맞지 않습니다."
+          # description: "Configurations of AlertManager cluster instances are out of sync"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusNotConnectedToAlertmanager }}
+      - alert: PrometheusNotConnectedToAlertmanager
+        expr: prometheus_notifications_alertmanagers_discovered < 1
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → Alertmanager 연결 실패"
+        annotations:
+          summary: "Prometheus not connected to alertmanager"
+          description: "프로메테우스가 알람매니저에 연결 할 수 없는 상태입니다."
+          # description: "Prometheus cannot connect the alertmanager"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusRuleEvaluationFailures }}
+      - alert: PrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[3m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Rule group : {{ "{{" }} $labels.rule_group {{ "}}" }}"
+          current: " → 규칙 평가 실패"
+        annotations:
+          summary: "Prometheus rule evaluation failures"
+          description: "프로메테우스가 Rule 평가를 실패했습니다. 시스템 장애가 발생해도 알람이 전송되지 않을 수 있습니다."
+          # description: "Prometheus encountered rule evaluation failures, leading to potentially ignored alerts."
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusTemplateTextExpansionFailures }}
+      - alert: PrometheusTemplateTextExpansionFailures
+        expr: increase(prometheus_template_text_expansion_failures_total[3m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Job : {{ "{{" }} $labels.job {{ "}}" }}"
+          current: " → 템플릿 텍스트 확장 실패"
+        annotations:
+          summary: "Prometheus template text expansion failures"
+          description: "프로메테우스가 템플릿 텍스트 확장을 실패했습니다. 메트릭이나 라벨 관리에 장애가 생길 수 있습니다."
+          # description: "Prometheus encountered template text expansion failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusRuleEvaluationSlow }}
+      - alert: PrometheusRuleEvaluationSlow
+        expr: prometheus_rule_group_last_duration_seconds > prometheus_rule_group_interval_seconds
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Rule group : {{ "{{" }} $labels.rule_group {{ "}}" }}"
+          current: " → 규칙 평가 지연"
+        annotations:
+          summary: "Prometheus rule evaluation slow"
+          description: "프로메테우스가 규칙을 평가하는 시간이 지연되고 있습니다."
+          # description: "Prometheus rule evaluation took more time than the scheduled interval. It indicates a slower storage backend access or too complex query."
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusNotificationsBacklog }}
+      - alert: PrometheusNotificationsBacklog
+        expr: min_over_time(prometheus_notifications_queue_length[10m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스"
+          current: " → 알림 Queue 소모 지연"
+        annotations:
+          summary: "Prometheus notifications backlog"
+          description: "프로메테우스 알림 큐가 10분 동안 비워지지 않고 있습니다."
+          # description: "The Prometheus notification queue has not been empty for 10 minutes"
+      {{- end }}
+      {{- if .Values.alert.prometheusAlertmanager.prometheusAlertmanagerNotificationFailing }}
+      - alert: PrometheusAlertmanagerNotificationFailing
+        expr: rate(alertmanager_notifications_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Integration : {{ "{{" }} $labels.integration {{ "}}" }}"
+          current: " → 알림 발송 실패"
+        annotations:
+          summary: "Prometheus AlertManager notification failing"
+          description: "프로메테우스 알람매니저가 알림 발송을 실패했습니다."
+          # description: "Alertmanager is failing sending notifications"
+      {{- end }}
+{{- end }}

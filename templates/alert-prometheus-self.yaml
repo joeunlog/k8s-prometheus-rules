@@ -1,0 +1,223 @@
+{{- if .Values.alert.prometheusSelf.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-prometheus-self
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: prometheus-self
+    rules:
+      {{- if .Values.alert.prometheusSelf.prometheusTargetMissing }}
+      - alert: PrometheusTargetMissing
+        expr: count(up == 0)by(job)
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Target : {{ "{{" }} $labels.job {{ "}}" }}"
+          current: ' → 메트릭 수집 타겟 {{ "{{" }} printf "%.0f" $value {{ "}}" }} 개 사라짐'
+        annotations:
+          summary: "Prometheus target missing"
+          description: "메트릭 수집 타겟 중 일부가 사라졌습니다. 해당 서비스의 상태나 수집 설정을 확인해주세요."
+          # description: "A Prometheus target has disappeared. An exporter might be crashed."
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusConfigurationReloadFailure }}
+      - alert: PrometheusConfigurationReloadFailure
+        expr: prometheus_config_last_reload_successful != 1
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스"
+          current: " → 설정 파일 업로드 실패"
+        annotations:
+          summary: "Prometheus configuration reload failure"
+          description: "프로메테우스 설정 파일 업로드를 실패했습니다."
+          # description: "Prometheus configuration reload error"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTooManyRestarts }}
+      - alert: PrometheusTooManyRestarts
+        expr: changes(process_start_time_seconds{job=~".*prometheus$|.*pushgateway$|.*alertmanager$"}[15m]) > 2
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Pod : {{ "{{" }} $labels.pod {{ "}}" }}"
+          current: ' → {{ "{{" }} printf "%.0f" $value {{ "}}" }} 번 재시작'
+        annotations:
+          summary: "Prometheus too many restarts"
+          description: "프로메테우스 파드가 15분 동안 2번 이상 재시작했습니다."
+          # description: "Prometheus has restarted more than twice in the last 15 minutes. It might be crashlooping."
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTargetEmpty }}
+      - alert: PrometheusTargetEmpty
+        expr: prometheus_sd_discovered_targets == 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Target : {{ "{{" }} $labels.config {{ "}}" }}"
+          current: " → 수집 대상 없음"
+        annotations:
+          summary: "Prometheus target empty"
+          description: "프로메테우스가 Service Discovery로 수집 대상을 찾지 못했습니다."
+          # description: "Prometheus has no target in service discovery"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTargetScrapingSlow }}
+      - alert: PrometheusTargetScrapingSlow
+        expr: prometheus_target_interval_length_seconds{quantile="0.9"} / on (interval, instance, job) prometheus_target_interval_length_seconds{quantile="0.5"} > 1.05
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "프로메테우스"
+          current: " → 메트릭 수집 지연"
+        annotations:
+          summary: "Prometheus target scraping slow"
+          description: "프로메테우스가 메트릭을 수집하는 시간이 지연되고 있습니다. 프로메테우스 scale up을 고려해주세요."
+          # description: "Prometheus is scraping exporters slowly since it exceeded the requested interval time. Your Prometheus server is under-provisioned."
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusLargeScrape }}
+      - alert: PrometheusLargeScrape
+        expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[10m]) > 10
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Job : {{ "{{" }} $labels.job {{ "}}" }}"
+          current: " → 메트릭 수집 Limit 초과"
+        annotations:
+          summary: "Prometheus large scrape"
+          description: "프로메테우스가 수집하는 메트릭이 너무 많습니다."
+          # description: "Prometheus has many scrapes that exceed the sample limit"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTargetScrapeDuplicate }}
+      - alert: PrometheusTargetScrapeDuplicate
+        expr: increase(prometheus_target_scrapes_sample_duplicate_timestamp_total[5m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Job : {{ "{{" }} $labels.job {{ "}}" }}"
+          current: " → 메트릭 중복"
+        annotations:
+          summary: "Prometheus target scrape duplicate"
+          description: "프로메테우스가 같은 메트릭에 다른 값을 가진 중복 데이터를 감지하여 수집을 거부했습니다."
+          # description: "Prometheus has many samples rejected due to duplicate timestamps but different values"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbCheckpointCreationFailures }}
+      - alert: PrometheusTsdbCheckpointCreationFailures
+        expr: increase(prometheus_tsdb_checkpoint_creations_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB 체크포인트 생성 실패"
+        annotations:
+          summary: "Prometheus TSDB checkpoint creation failures"
+          description: "프로메테우스가 체크포인트 생성을 실패했습니다."
+          # description: "Prometheus encountered checkpoint creation failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbCheckpointDeletionFailures }}
+      - alert: PrometheusTsdbCheckpointDeletionFailures
+        expr: increase(prometheus_tsdb_checkpoint_deletions_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB 체크포인트 삭제 실패"
+        annotations:
+          summary: "Prometheus TSDB checkpoint deletion failures"
+          description: "프로메테우스가 체크포인트 삭제를 실패했습니다."
+          # description: "Prometheus encountered checkpoint deletion failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbCompactionsFailed }}
+      - alert: PrometheusTsdbCompactionsFailed
+        expr: increase(prometheus_tsdb_compactions_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB 압축 실패"
+        annotations:
+          summary: "Prometheus TSDB compactions failed"
+          description: "프로메테우스가 TSDB 압축을 실패했습니다."
+          # description: "Prometheus encountered TSDB compactions failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbHeadTruncationsFailed }}
+      - alert: PrometheusTsdbHeadTruncationsFailed
+        expr: increase(prometheus_tsdb_head_truncations_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB head 절단 작업 실패"
+        annotations:
+          summary: "Prometheus TSDB head truncations failed"
+          description: "프로메테우스가 TSDB head 절단 작업을 실패했습니다."
+          # description: "Prometheus encountered TSDB head truncation failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbReloadFailures }}
+      - alert: PrometheusTsdbReloadFailures
+        expr: increase(prometheus_tsdb_reloads_failures_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB 불러오기 실패"
+        annotations:
+          summary: "Prometheus TSDB reload failures"
+          description: "프로메테우스가 TSDB 불러오기 작업을 실패했습니다."
+          # description: "Prometheus encountered TSDB reload failures"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbWalCorruptions }}
+      - alert: PrometheusTsdbWalCorruptions
+        expr: increase(prometheus_tsdb_wal_corruptions_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB WAL 손상"
+        annotations:
+          summary: "Prometheus TSDB WAL corruptions"
+          description: "프로메테우스의 TSDB WAL이 손상됐습니다."
+          # description: "Prometheus encountered TSDB WAL corruptions"
+      {{- end }}
+      {{- if .Values.alert.prometheusSelf.prometheusTsdbWalTruncationsFailed }}
+      - alert: PrometheusTsdbWalTruncationsFailed
+        expr: increase(prometheus_tsdb_wal_truncations_failed_total[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "프로메테우스"
+          current: " → TSDB WAL 절단 작업 실패"
+        annotations:
+          summary: "Prometheus TSDB WAL truncations failed"
+          description: "프로메테우스가 TSDB WAL 절단 작업을 실패했습니다."
+          # description: "Prometheus encountered TSDB WAL truncation failures"
+      {{- end }}
+{{- end }}

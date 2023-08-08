@@ -1,0 +1,186 @@
+### This helm chart deploys prometheus rules.
+### This is managed by joeunvit.
+
+nameOverride: ""
+fullnameOverride: ""
+
+# which namespace do you choose for deploy promethe rules.
+namespace: grafana
+
+# what is your tenant id? (X-Scope-OrgID)
+tenant: example
+
+# Alerting rules
+alert:
+  # This is for checking that tenant send monitoring data well to main cluster.
+  checkTenant:
+    enabled: true
+
+  # Kubernetes components status alert.
+  k8sComponent:
+    enabled: true
+    # You can enable/disable each alert rule by changing this depth values to false.
+    kubernetesApiServerErrors: true
+    kubernetesApiClientErrors: true
+    kubernetesClientCertificateExpiresNextWeek: true
+    kubernetesClientCertificateExpiresSoon: true
+
+  # Kubernetes nodes status alert.
+  k8sNode:
+    enabled: true
+    kubernetesNodeReady: true
+    kubernetesMemoryPressure: true
+    kubernetesDiskPressure: true
+    kubernetesNetworkUnavailable: true
+    kubernetesOutOfCapacity: true
+
+  # Kubernetes pods status alert.
+  k8sPod:
+    enabled: true
+    kubernetesContainerOomKiller: true
+    kubernetesPodNotHealthy: true
+    kubernetesPodCrashLooping: true
+
+  # Kubernetes psersistent volumes status alert.
+  k8sPV:
+    enabled: true
+    kubernetesPersistentvolumeclaimPending: true
+    kubernetesVolumeOutOfDiskSpace: true
+    kubernetesVolumeFullInOneDay: true
+    kubernetesPersistentvolumeError: true
+
+  # kubernetes workload status alert.
+  k8sWorkload:
+    enabled: true
+    kubernetesJobFailed: true
+    kubernetesCronjobSuspended: true
+    kubernetesStatefulsetDown: true
+    kubernetesHpaScalingAbility: true
+    kubernetesHpaMetricAvailability: true
+    kubernetesHpaScaleCapability: true
+    kubernetesReplicassetMismatch: true
+    kubernetesDeploymentReplicasMismatch: true
+    kubernetesStatefulsetReplicasMismatch: true
+    kubernetesDeploymentGenerationMismatch: true
+    kubernetesStatefulsetGenerationMismatch: true
+    kubernetesStatefulsetUpdateNotRolledOut: true
+    kubernetesDaemonsetRolloutStuck: true
+    kubernetesDaemonsetMisscheduled: true
+    kubernetesJobSlowCompletion: true
+
+  # node's cpu and memory status alert.
+  nodeCpuMemory:
+    enabled: true
+    hostOutOfMemory: true
+    hostMemoryUnderMemoryPressure: true
+    hostMemoryIsUnderUtilized: true
+    hostHighCpuLoad: true
+    hostCpuIsUnderUtilized: true
+    hostCpuStealNoisyNeighbor: true
+    hostCpuHighIowait: true
+    hostOomKillDetected: true
+
+  # node's disk and memory status alert.
+  nodeDiskNetwork:
+    enabled: true
+    hostUnusualNetworkThroughputIn: true
+    hostUnusualNetworkThroughputOut: true
+    hostUnusualDiskReadRate: true
+    hostUnusualDiskWriteRate: true
+    hostOutOfDiskSpace: true
+    hostDiskWillFillIn24Hours: true
+    hostOutOfInodes: true
+    hostInodesWillFillIn24Hours: true
+    hostUnusualDiskReadLatency: true
+    hostUnusualDiskWriteLatency: true
+    hostNetworkReceiveErrors: true
+    hostNetworkTransmitErrors: true
+    hostNetworkInterfaceSaturated: true
+
+  # prometheus's alertmanager status alert.
+  prometheusAlertmanager:
+    enabled: true
+    prometheusAlertmanagerJobMissing: true # false
+    prometheusAlertmanagerConfigurationReloadFailure: true
+    prometheusAlertmanagerConfigNotSynced: true
+    prometheusNotConnectedToAlertmanager: true # false
+    prometheusRuleEvaluationFailures: true
+    prometheusTemplateTextExpansionFailures: true
+    prometheusRuleEvaluationSlow: true
+    prometheusNotificationsBacklog: true
+    prometheusAlertmanagerNotificationFailing: true
+
+  # prometheus status alert.
+  prometheusSelf:
+    enabled: true
+    prometheusTargetMissing: true
+    prometheusConfigurationReloadFailure: true
+    prometheusTooManyRestarts: true
+    prometheusTargetEmpty: true
+    prometheusTargetScrapingSlow: true
+    prometheusLargeScrape: true
+    prometheusTargetScrapeDuplicate: true
+    prometheusTsdbCheckpointCreationFailures: true
+    prometheusTsdbCheckpointDeletionFailures: true
+    prometheusTsdbCompactionsFailed: true
+    prometheusTsdbHeadTruncationsFailed: true
+    prometheusTsdbReloadFailures: true
+    prometheusTsdbWalCorruptions: true
+    prometheusTsdbWalTruncationsFailed: true
+
+  # additional alert rules.
+  # If you want to edit rules,
+  # disable them above and create new ones below.
+  # You can specify your new rule like below example,
+  # you should define that as a string.
+  additional: ''
+  # additional: |
+  #   groups:
+  #     - name: additional-slack
+  #       rules:
+  #         - alert: testpodstatusOK-additional
+  #           expr: kube_pod_info{pod="prometheus-prometheus-release-kube-pr-prometheus-0"} < 0
+  #           for: 0m
+  #           labels:
+  #             tenant: {{ .Values.tenant }}
+  #             owned: test
+  #             severity: critical
+  #             target: "Pod : {{ "{{" }} $labels.pod {{ "}}" }}"
+  #             current: ' : {{ "{{" }} printf "%.0f" $value {{ "}}" }} 상태양호'
+  #             test: "yes"
+  #           annotations:
+  #             summary: '{{ "{{" }} printf "%.0f" $value {{ "}}" }}'
+  #             description: "프로메테우스 파드가 정상 작동 중 - 알람 테스트"
+  #         - alert: testStatefulsetOK-additional
+  #           expr: kube_statefulset_replicas{statefulset=~"consul-release-consul-server|mimir-release-ingester"} < 0
+  #           for: 0m
+  #           labels:
+  #             tenant: {{ .Values.tenant }}
+  #             owned: test
+  #             severity: warning
+  #             target: "Statefulset : {{ "{{" }} $labels.statefulset {{ "}}" }}"
+  #             current: ' : {{ "{{" }} printf "%.0f" $value {{ "}}" }} 개 파드'
+  #             test: "yes"
+  #           annotations:
+  #             summary: "statefulset status OK, just test"
+  #             description: "Statefulset 파드 개수 체크 - 알람 테스트"
+  #     - name: node-cpu-memory
+  #       rules:
+  #         - alert: HostHighCpuLoad
+  #           expr: avg by(node) (sum without(mode) (rate(node_cpu_seconds_total{mode!~"idle"}[2m]))) * 100 > 90
+  #           for: 0m
+  #           labels:
+  #             tenant: {{ .Values.tenant }}
+  #             owned: mimir
+  #             severity: warning
+  #             target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+  #             current: ' → CPU {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+  #           annotations:
+  #             summary: "Host high CPU load"
+  #             description: "노드 CPU를 90% 이상 사용하고 있습니다."
+  
+# Recording rules
+record:
+  podMetric:
+    enabled: true
+  

@@ -1,0 +1,1 @@
+Prometheusrules for {{ .Values.tenant }} are created.

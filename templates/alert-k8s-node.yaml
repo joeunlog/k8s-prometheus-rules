@@ -1,0 +1,88 @@
+{{- if .Values.alert.k8sNode.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-k8s-node
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: k8s-node
+    rules:
+      {{- if .Values.alert.k8sNode.kubernetesNodeReady }}
+      - alert: KubernetesNodeReady
+        expr: kube_node_status_condition{condition="Ready",status="true"} == 0
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: " → Not Ready"
+        annotations:
+          summary: "Kubernetes Node ready"
+          description: "노드 Not Ready 상태가 5분 이상 지속되고 있습니다."
+          # description: "Node has been unready for a long time"
+      {{- end }}
+      {{- if .Values.alert.k8sNode.kubernetesMemoryPressure }}
+      - alert: KubernetesMemoryPressure
+        expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: " → Memory Pressure"
+        annotations:
+          summary: "Kubernetes memory pressure"
+          description: "노드 Memory Pressure 상태가 2분 이상 지속되고 있습니다."
+          # description: "Node has MemoryPressure condition"
+      {{- end }}
+      {{- if .Values.alert.k8sNode.kubernetesDiskPressure }}
+      - alert: KubernetesDiskPressure
+        expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: " → Disk Pressure"
+        annotations:
+          summary: "Kubernetes disk pressure"
+          description: "노드 Disk Pressure 상태가 2분 이상 지속되고 있습니다."
+          # description: "Node has DiskPressure condition"
+      {{- end }}
+      {{- if .Values.alert.k8sNode.kubernetesNetworkUnavailable }}
+      - alert: KubernetesNetworkUnavailable
+        expr: kube_node_status_condition{condition="NetworkUnavailable",status="true"} == 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: " → Network Unavailable"
+        annotations:
+          summary: "Kubernetes network unavailable"
+          description: "노드 Network Unavailable 상태가 2분 이상 지속되고 있습니다."
+          # description: "Node has NetworkUnavailable condition"
+      {{- end }}
+      {{- if .Values.alert.k8sNode.kubernetesOutOfCapacity }}
+      - alert: KubernetesOutOfCapacity
+        expr: sum by (node) ((kube_pod_status_phase{phase="Running"} == 1) + on(uid) group_left(node) (0 * kube_pod_info{pod_template_hash=""})) / sum by (node) (kube_node_status_allocatable{resource="pods"}) * 100 > 90
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 파드 할당 가능 개수 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Kubernetes out of capacity"
+          description: "노드에 할당 가능한 파드 개수를 90% 이상 사용하고 있습니다."
+          # description: "Node is out of capacity"
+      {{- end }}
+{{- end }}

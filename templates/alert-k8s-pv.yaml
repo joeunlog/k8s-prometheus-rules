@@ -1,0 +1,73 @@
+{{- if .Values.alert.k8sPV.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-k8s-pv
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: k8s-pv
+    rules:
+      {{- if .Values.alert.k8sPV.kubernetesPersistentvolumeclaimPending }}
+      - alert: KubernetesPersistentvolumeclaimPending
+        expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "PVC : {{ "{{" }} $labels.persistentvolumeclaim {{ "}}" }}"
+          current: " → Pending 상태"
+        annotations:
+          summary: "Kubernetes PersistentVolumeClaim pending"
+          description: "쿠버네티스 Persistent Volume Claim이 Pending 상태입니다."
+          # description: "PersistentVolumeClaim is pending"
+      {{- end }}
+      {{- if .Values.alert.k8sPV.kubernetesVolumeOutOfDiskSpace }}
+      - alert: KubernetesVolumeOutOfDiskSpace
+        expr: 100 - kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 > 90
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "PVC : {{ "{{" }} $labels.persistentvolumeclaim {{ "}}" }}"
+          current: ' → 볼륨 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Kubernetes Volume out of disk space"
+          description: "쿠버네티스 볼륨을 90% 이상 사용하고 있습니다."
+          # description: "Volume is almost full (< 10% left)"
+      {{- end }}
+      {{- if .Values.alert.k8sPV.kubernetesVolumeFullInOneDay }}
+      - alert: KubernetesVolumeFullInOneDay
+        expr: 100 - kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes * 100 > 90 and predict_linear(kubelet_volume_stats_available_bytes[6h], 24 * 3600) < 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "PVC : {{ "{{" }} $labels.persistentvolumeclaim {{ "}}" }}"
+          current: ' → 볼륨 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Kubernetes Volume full in one day"
+          description: "쿠버네티스 볼륨을 90% 이상 사용하고 있고 증가율이 높아서 24시간 이내에 가득 찰 것으로 예상됩니다."
+          # description: "Volume is expected to fill up within one day."
+      {{- end }}
+      {{- if .Values.alert.k8sPV.kubernetesPersistentvolumeError }}
+      - alert: KubernetesPersistentvolumeError
+        expr: kube_persistentvolume_status_phase{phase=~"Failed|Pending", job="kube-state-metrics"} > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "PV : {{ "{{" }} $labels.persistentvolume {{ "}}" }}"
+          current: " → Failed|Pending 상태"
+        annotations:
+          summary: "Kubernetes PersistentVolume error"
+          description: "쿠버네티스 Persistent Volume이 비정상 상태입니다."
+          # description: "Persistent volume is in bad state"
+      {{- end }}
+{{- end }}

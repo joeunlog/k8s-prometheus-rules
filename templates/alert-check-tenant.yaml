@@ -1,0 +1,25 @@
+{{- if .Values.alert.checkTenant.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-check-tenant
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: check-tenant
+    rules:
+      - alert: TenantMetricMissing
+        expr: absent(up{job=~".*prometheus$"})
+        for: 0m
+        labels:
+          owned: main-cluster
+          severity: warning
+          target: "Tenant cluster : {{ .Values.tenant }}"
+          current: " → 메트릭 수집 중단"
+        annotations:
+          summary: "Tenant's prometheus job missing"
+          description: "테넌트 메트릭 수집이 중단됐습니다."
+          # description: "A Prometheus job has disappeared"
+{{- end }}

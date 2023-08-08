@@ -1,0 +1,133 @@
+{{- if .Values.alert.nodeCpuMemory.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-node-cpu-memory
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: node-cpu-memory
+    rules:
+      {{- if .Values.alert.nodeCpuMemory.hostOutOfMemory }}
+      - alert: HostOutOfMemory
+        expr: 100 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100) > 90
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 메모리 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host out of memory"
+          description: "노드 메모리를 90% 이상 사용하고 있습니다."
+          # description: "Node memory is filling up (< 10% left)"
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostMemoryUnderMemoryPressure }}
+      - alert: HostMemoryUnderMemoryPressure
+        expr: rate(node_vmstat_pgmajfault[1m]) > 1000
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → fault {{ "{{" }} printf "%.0f" $value {{ "}}" }} 번 발생'
+        annotations:
+          summary: "Host memory under memory pressure"
+          description: "노드 메모리 부하로 인해 major page fault가 1분 동안 1000번 이상 발생하고 있습니다."
+          # description: "The node is under heavy memory pressure. High rate of major page faults"
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostMemoryIsUnderUtilized }}
+      - alert: HostMemoryIsUnderUtilized
+        expr: 100 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100) < 20
+        for: 2w
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: info
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 메모리 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host Memory is under utilized"
+          description: "2주일 동안 노드 메모리를 20% 이하로 사용하고 있습니다. scale down을 고려해보세요."
+          # description: "Node memory is < 20% for 1 week. Consider reducing memory space."
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostHighCpuLoad }}
+      - alert: HostHighCpuLoad
+        expr: avg by(node) (sum without(mode) (rate(node_cpu_seconds_total{mode!~"idle"}[2m]))) * 100 > 80
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → CPU {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host high CPU load"
+          description: "노드 CPU를 80% 이상 사용하고 있습니다."
+          # description: "CPU load is > 80%"
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostCpuIsUnderUtilized }}
+      - alert: HostCpuIsUnderUtilized
+        expr: avg by(node) (sum without(mode) (rate(node_cpu_seconds_total{mode!~"idle"}[30m]))) * 100 < 20
+        for: 2w
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: info
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → CPU {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host CPU is under utilized"
+          description: "2주일 동안 노드 CPU를 20% 이하로 사용하고 있습니다. Scale down을 고려해보세요."
+          # description: "CPU load is < 20% for 1 week. Consider reducing the number of CPUs."
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostCpuStealNoisyNeighbor }}
+      - alert: HostCpuStealNoisyNeighbor
+        expr: avg by(node) (rate(node_cpu_seconds_total{mode="steal"}[5m])) * 100 > 20
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → CPU steal {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host CPU steal noisy neighbor"
+          description: "CPU가 steal mode에 20% 이상 사용되고 있습니다. VM의 성능이 저하될 수 있습니다."
+          # description: "CPU steal is > 10%. A noisy neighbor is killing VM performances or a spot instance may be out of credit."
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostCpuHighIowait }}
+      - alert: HostCpuHighIowait
+        expr: avg by (node) (rate(node_cpu_seconds_total{mode="iowait"}[5m])) * 100 > 5
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → CPU iowait {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host CPU high iowait"
+          description: "CPU가 iowait mode에 5% 이상 사용되고 있습니다. 디스크나 네트워크 성능을 검토해야 합니다."
+          # description: "CPU iowait > 5%. A high iowait means that you are disk or network bound."
+      {{- end }}
+      {{- if .Values.alert.nodeCpuMemory.hostOomKillDetected }}
+      - alert: HostOomKillDetected
+        expr: increase(node_vmstat_oom_kill[1m]) > 0
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → OOM Kill {{ "{{" }} printf "%.0f" $value {{ "}}" }} 번 발생'
+        annotations:
+          summary: "Host OOM kill detected"
+          description: "노드 OOM kill이 발생했습니다."
+          # description: "OOM kill detected"
+      {{- end }}
+{{- end }}

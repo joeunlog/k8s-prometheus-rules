@@ -1,0 +1,208 @@
+{{- if .Values.alert.nodeDiskNetwork.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-node-disk-network
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: node-disk-network
+    rules:
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualNetworkThroughputIn }}
+      - alert: HostUnusualNetworkThroughputIn
+        expr: sum by (node) (rate(node_network_receive_bytes_total[2m])) / 1024 / 1024 > 100
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 네트워크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} MB/s 데이터 유입'
+        annotations:
+          summary: "Host unusual network throughput in"
+          description: "노드가 1초에 100 MB 이상의 과도한 데이터를 받고 있습니다."
+          # description: "Host network interfaces are probably receiving too much data (> 100 MB/s)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualNetworkThroughputOut }}
+      - alert: HostUnusualNetworkThroughputOut
+        expr: sum by (node) (rate(node_network_transmit_bytes_total[2m])) / 1024 / 1024 > 100
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 네트워크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} MB/s 데이터 전송'
+        annotations:
+          summary: "Host unusual network throughput out"
+          description: "노드가 1초에 100 MB 이상의 과도한 데이터를 전송하고 있습니다."
+          # description: "Host network interfaces are probably sending too much data (> 100 MB/s)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualDiskReadRate }}
+      - alert: HostUnusualDiskReadRate
+        expr: sum by (node) (rate(node_disk_read_bytes_total[2m])) / 1024 / 1024 > 50
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} MB/s 데이터 읽기'
+        annotations:
+          summary: "Host unusual disk read rate"
+          description: "디스크가 1초에 50 MB 이상의 과도한 데이터를 읽고 있습니다."
+          # description: "Disk is probably reading too much data (> 50 MB/s)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualDiskWriteRate }}
+      - alert: HostUnusualDiskWriteRate
+        expr: sum by (node) (rate(node_disk_written_bytes_total[2m])) / 1024 / 1024 > 50
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} MB/s 데이터 쓰기'
+        annotations:
+          summary: "Host unusual disk write rate"
+          description: "디스크가 1초에 50 MB 이상의 과도한 데이터를 쓰고 있습니다."
+          # description: "Disk is probably writing too much data (> 50 MB/s)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostOutOfDiskSpace }}
+      - alert: HostOutOfDiskSpace
+        expr: 100 - (node_filesystem_avail_bytes{fstype!="tmpfs", mountpoint!~"/run|boot"} * 100) / node_filesystem_size_bytes > 90 and ON (node, device, mountpoint) node_filesystem_readonly == 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host out of disk space"
+          description: "노드 디스크를 90% 이상 사용하고 있습니다."
+          # description: "Disk is almost full (< 10% left)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostDiskWillFillIn24Hours }}
+      - alert: HostDiskWillFillIn24Hours
+        expr: 100 - (node_filesystem_avail_bytes{fstype!~"tmpfs"} * 100) / node_filesystem_size_bytes > 90 and ON (node, device, mountpoint) predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs"}[1h], 24 * 3600) < 0 and ON (node, device, mountpoint) node_filesystem_readonly == 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host disk will fill in 24 hours"
+          description: "노드 디스크를 현재 90% 이상 사용하고 있고 증가율이 높아서 24시간 이내에 가득 찰 것으로 예상됩니다."
+          # description: "Filesystem is predicted to run out of space within the next 24 hours at current write rate"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostOutOfInodes }}
+      - alert: HostOutOfInodes
+        expr: 100 - node_filesystem_files_free{fstype!="tmpfs"} / node_filesystem_files * 100 > 90 and ON (node, device, mountpoint) node_filesystem_readonly == 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 inode {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host out of inodes"
+          description: "디스크 inode를 90% 이상 사용하고 있습니다."
+          # description: "Disk is almost running out of available inodes (< 10% left)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostInodesWillFillIn24Hours }}
+      - alert: HostInodesWillFillIn24Hours
+        expr: 100 - node_filesystem_files_free{fstype!="tmpfs"} / node_filesystem_files * 100 > 90 and predict_linear(node_filesystem_files_free[1h], 24 * 3600) < 0 and ON (node, device, mountpoint) node_filesystem_readonly == 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 inode {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host inodes will fill in 24 hours"
+          description: "디스크 inode를 90% 이상 사용하고 있고 증가율이 높아서 24시간 이내에 가득 찰 것으로 예상됩니다."
+          # description: "Filesystem is predicted to run out of inodes within the next 24 hours at current write rate"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualDiskReadLatency }}
+      - alert: HostUnusualDiskReadLatency
+        expr: rate(node_disk_read_time_seconds_total[1m]) / rate(node_disk_reads_completed_total[1m]) > 0.1 and rate(node_disk_reads_completed_total[1m]) > 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 읽기 지연 시간 {{ "{{" }} printf "%.3f" $value {{ "}}" }} 초'
+        annotations:
+          summary: "Host unusual disk read latency"
+          description: "디스크 읽기 지연 시간이 100ms 이상입니다."
+          # description: "Disk latency is growing (read operations > 100ms)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostUnusualDiskWriteLatency }}
+      - alert: HostUnusualDiskWriteLatency
+        expr: rate(node_disk_write_time_seconds_total[1m]) / rate(node_disk_writes_completed_total[1m]) > 0.1 and rate(node_disk_writes_completed_total[1m]) > 0
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 디스크 쓰기 지연 시간 {{ "{{" }} printf "%.3f" $value {{ "}}" }} 초'
+        annotations:
+          summary: "Host unusual disk write latency"
+          description: "디스크 쓰기 지연 시간이 100ms 이상입니다."
+          # description: "Disk latency is growing (write operations > 100ms)"
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostNetworkReceiveErrors }}
+      - alert: HostNetworkReceiveErrors
+        expr: rate(node_network_receive_errs_total[2m]) / rate(node_network_receive_packets_total[2m]) * 100 > 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 네트워크 유입 에러 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 발생'
+        annotations:
+          summary: "Host Network Receive Errors"
+          description: "노드에 네트워크 유입 에러가 발생했습니다."
+          # description: "Host interface has encountered receive errors in the last two minutes."
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostNetworkTransmitErrors }}
+      - alert: HostNetworkTransmitErrors
+        expr: rate(node_network_transmit_errs_total[2m]) / rate(node_network_transmit_packets_total[2m]) * 100 > 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 네트워크 전송 에러 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 발생'
+        annotations:
+          summary: "Host Network Transmit Errors"
+          description: "노드에 네트워크 전송 에러가 발생했습니다."
+          # description: "Host interface has encountered transmit errors in the last two minutes."
+      {{- end }}
+      {{- if .Values.alert.nodeDiskNetwork.hostNetworkInterfaceSaturated }}
+      - alert: HostNetworkInterfaceSaturated
+        expr: (rate(node_network_receive_bytes_total{device!~"^tap.*|^vnet.*|^veth.*|^tun.*"}[1m]) + rate(node_network_transmit_bytes_total{device!~"^tap.*|^vnet.*|^veth.*|^tun.*"}[1m])) / node_network_speed_bytes{device!~"^tap.*|^vnet.*|^veth.*|^tun.*"} * 100 > 80 < 1000000
+        for: 1m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Node : {{ "{{" }} $labels.node {{ "}}" }}"
+          current: ' → 네트워크 전송 대역 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 사용 중'
+        annotations:
+          summary: "Host Network Interface Saturated"
+          description: "노드의 네트워크 인터페이스에 부하가 발생했습니다."
+          # description: "The network interface is getting overloaded."
+      {{- end }}
+{{- end }}

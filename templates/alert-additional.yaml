@@ -1,0 +1,11 @@
+{{- if .Values.alert.additional }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-additional
+  namespace: {{ .Values.namespace }}
+spec:
+  {{- (tpl .Values.alert.additional .) | nindent 2 }}
+{{- end }}

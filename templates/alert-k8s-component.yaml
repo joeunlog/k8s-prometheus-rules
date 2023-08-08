@@ -1,0 +1,73 @@
+{{- if .Values.alert.k8sComponent.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "k8s-prometheus-rules.labels" . | nindent 4 }}
+  name: {{ include "k8s-prometheus-rules.fullname" . }}-alert-k8s-component
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: k8s-component
+    rules:
+      {{- if .Values.alert.k8sComponent.kubernetesApiServerErrors }}
+      - alert: KubernetesApiServerErrors
+        expr: sum(rate(apiserver_request_total{job="apiserver",code=~"^(?:5..)$"}[1m])) / sum(rate(apiserver_request_total{job="apiserver"}[1m])) * 100 > 3
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "쿠버네티스 API 서버"
+          current: ' → 에러 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 발생'
+        annotations:
+          summary: "Kubernetes API server errors"
+          description: "쿠버네티스 API 서버 에러가 3% 이상 발생했습니다."
+          # description: "Kubernetes API server is experiencing high error rate"
+      {{- end }}
+      {{- if .Values.alert.k8sComponent.kubernetesApiClientErrors }}
+      - alert: KubernetesApiClientErrors
+        expr: (sum(rate(rest_client_requests_total{code=~"(4|5).."}[1m])) by (instance, job, service) / sum(rate(rest_client_requests_total[1m])) by (instance, job, service)) * 100 > 1
+        for: 2m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: "Client : {{ "{{" }} $labels.job {{ "}}" }}"
+          current: ' → 에러 {{ "{{" }} printf "%.2f" $value {{ "}}" }} % 발생'
+        annotations:
+          summary: "Kubernetes API client errors"
+          description: "쿠버네티스 API Client 에러가 1% 이상 발생했습니다."
+          # description: "Kubernetes API client is experiencing high error rate"
+      {{- end }}
+      {{- if .Values.alert.k8sComponent.kubernetesClientCertificateExpiresNextWeek }}
+      - alert: KubernetesClientCertificateExpiresNextWeek
+        expr: apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 7*24*60*60
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: ""
+          current: ""
+        annotations:
+          summary: "Kubernetes client certificate expires next week"
+          description: "API 서버에 인증하기 위한 자격증명이 다음 주에 만료됩니다."
+          # description: "A client certificate used to authenticate to the apiserver is expiring next week."
+      {{- end }}
+      {{- if .Values.alert.k8sComponent.kubernetesClientCertificateExpiresSoon }}
+      - alert: KubernetesClientCertificateExpiresSoon
+        expr: apiserver_client_certificate_expiration_seconds_count{job="apiserver"} > 0 and histogram_quantile(0.01, sum by (job, le) (rate(apiserver_client_certificate_expiration_seconds_bucket{job="apiserver"}[5m]))) < 24*60*60
+        for: 0m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: critical
+          target: ""
+          current: ""
+        annotations:
+          summary: "Kubernetes client certificate expires soon"
+          description: "API 서버에 인증하기 위한 자격증명이 24시간 이내에 만료됩니다."
+          # description: "A client certificate used to authenticate to the apiserver is expiring in less than 24.0 hours."
+      {{- end }}
+{{- end }}
