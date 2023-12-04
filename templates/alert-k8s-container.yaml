@@ -1,0 +1,28 @@
+{{- if .Values.alert.k8sContainer.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    {{- include "heimdall-rules.labels" . | nindent 4 }}
+  name: {{ include "heimdall-rules.fullname" . }}-alert-k8s-container
+  namespace: {{ .Values.namespace }}
+spec:
+  groups:
+  - name: k8s-container
+    rules:
+      {{- if .Values.alert.k8sContainer.kubernetesContainerImageIdMismatch }}
+      - alert: KubernetesContainerImageIdMismatch
+        expr: count by(image) (count by(image_id, image) (kube_pod_container_info)) > 1
+        for: 5m
+        labels:
+          tenant: {{ .Values.tenant }}
+          owned: mimir
+          severity: warning
+          target: "Image : {{ "{{" }} $labels.image {{ "}}" }}"
+          current: ' → 해당 Image의 tag에 서로 다른 컨테이너 이미지가 존재합니다.'
+        annotations:
+          summary: "Kubernetes container image ID mismatch"
+          description: "동일한 Image tag에 서로 다른 Image ID를 가진 컨테이너가 존재합니다."
+          # description: "Container Image ID is mismatch."
+      {{- end }}
+{{- end }}

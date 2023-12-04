@@ -18,7 +18,7 @@ alert:
 
   # Kubernetes components status alert.
   k8sComponent:
-    enabled: true
+    enabled: false
     # You can enable/disable each alert rule by changing this depth values to false.
     kubernetesApiServerErrors: true
     kubernetesApiClientErrors: true
@@ -27,7 +27,7 @@ alert:
 
   # Kubernetes nodes status alert.
   k8sNode:
-    enabled: true
+    enabled: false
     kubernetesNodeReady: true
     kubernetesMemoryPressure: true
     kubernetesDiskPressure: true
@@ -36,14 +36,19 @@ alert:
 
   # Kubernetes pods status alert.
   k8sPod:
-    enabled: true
+    enabled: false
     kubernetesContainerOomKiller: true
     kubernetesPodNotHealthy: true
     kubernetesPodCrashLooping: true
 
+  # Kubernetes containers status alert. (info)
+  k8sContainer:
+    enabled: false
+    kubernetesContainerImageIdMismatch: true
+
   # Kubernetes psersistent volumes status alert.
   k8sPV:
-    enabled: true
+    enabled: false
     kubernetesPersistentvolumeclaimPending: true
     kubernetesVolumeOutOfDiskSpace: true
     kubernetesVolumeFullInOneDay: true
@@ -51,7 +56,7 @@ alert:
 
   # kubernetes workload status alert.
   k8sWorkload:
-    enabled: true
+    enabled: false
     kubernetesJobFailed: true
     kubernetesCronjobSuspended: true
     kubernetesStatefulsetDown: true
@@ -70,7 +75,7 @@ alert:
 
   # node's cpu and memory status alert.
   nodeCpuMemory:
-    enabled: true
+    enabled: false
     hostOutOfMemory: true
     hostMemoryUnderMemoryPressure: true
     hostMemoryIsUnderUtilized: true
@@ -82,7 +87,7 @@ alert:
 
   # node's disk and memory status alert.
   nodeDiskNetwork:
-    enabled: true
+    enabled: false
     hostUnusualNetworkThroughputIn: true
     hostUnusualNetworkThroughputOut: true
     hostUnusualDiskReadRate: true
@@ -99,7 +104,7 @@ alert:
 
   # prometheus's alertmanager status alert.
   prometheusAlertmanager:
-    enabled: true
+    enabled: false
     prometheusAlertmanagerJobMissing: true # false
     prometheusAlertmanagerConfigurationReloadFailure: true
     prometheusAlertmanagerConfigNotSynced: true
@@ -112,7 +117,7 @@ alert:
 
   # prometheus status alert.
   prometheusSelf:
-    enabled: true
+    enabled: false
     prometheusTargetMissing: true
     prometheusConfigurationReloadFailure: true
     prometheusTooManyRestarts: true
